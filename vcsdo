@@ -3,16 +3,16 @@
 # @License:     GPL (see http://www.gnu.org/licenses/gpl.txt)
 # @Created:     2010-10-26.
 # @Last Change: 2010-10-31.
-# @Revision:    74
+# @Revision:    76
 
 require 'optparse'
 require 'rbconfig'
 require 'logger'
 require 'fileutils'
 
-class Repo
-    APPNAME = 'repo'
-    VERSION = '0.0'
+class VCSDo
+    APPNAME = 'vcsdo'
+    VERSION = '0.1'
     SYNONYMS = {
         'import' => 'patch',
         'apply' => 'patch',
@@ -50,7 +50,7 @@ class Repo
             opts = OptionParser.new do |opts|
                 opts.banner =  "Usage: #{File.basename($0)} [OPTIONS] COMMAND [ARGS ...]"
                 opts.separator ' '
-                opts.separator 'repo is a free software with ABSOLUTELY NO WARRANTY under'
+                opts.separator 'vcsdo is a free software with ABSOLUTELY NO WARRANTY under'
                 opts.separator 'the terms of the GNU General Public License version 2 or newer.'
                 opts.separator ' '
                 opts.separator 'Where COMMAND can be one of:'
@@ -117,7 +117,7 @@ class Repo
                 config[:dirs] = [Dir.getwd]
             end
 
-            return Repo.new(config, argv)
+            return VCSDo.new(config, argv)
         end
 
     end
@@ -251,7 +251,7 @@ end
 
 
 if __FILE__ == $0
-    Repo.with_args(ARGV).process
+    VCSDo.with_args(ARGV).process
 end
 
 
