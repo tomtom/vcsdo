@@ -1,0 +1,260 @@
+#!/usr/bin/env ruby
+# @Author:      Tom Link (micathom AT gmail com)
+# @License:     GPL (see http://www.gnu.org/licenses/gpl.txt)
+# @Created:     2010-10-26.
+# @Last Change: 2010-10-31.
+# @Revision:    74
+
+require 'optparse'
+require 'rbconfig'
+require 'logger'
+require 'fileutils'
+
+class Repo
+    APPNAME = 'repo'
+    VERSION = '0.0'
+    SYNONYMS = {
+        'import' => 'patch',
+        'apply' => 'patch',
+        'ca' => 'commitall',
+        'update' => 'pull',
+    }
+
+    class AppLog
+        def initialize(output=$stdout)
+            @output = output
+            $logger = Logger.new(output)
+            $logger.progname = defined?(APPNAME) ? APPNAME : File.basename($0, '.*')
+            $logger.datetime_format = "%H:%M:%S"
+            AppLog.set_level
+        end
+
+        def self.set_level
+            if $DEBUG
+                $logger.level = Logger::DEBUG
+            elsif $VERBOSE
+                $logger.level = Logger::INFO
+            else
+                $logger.level = Logger::WARN
+            end
+        end
+    end
+
+    class << self
+
+        def with_args(args)
+
+            AppLog.new
+
+            config = Hash.new
+            opts = OptionParser.new do |opts|
+                opts.banner =  "Usage: #{File.basename($0)} [OPTIONS] COMMAND [ARGS ...]"
+                opts.separator ' '
+                opts.separator 'repo is a free software with ABSOLUTELY NO WARRANTY under'
+                opts.separator 'the terms of the GNU General Public License version 2 or newer.'
+                opts.separator ' '
+                opts.separator 'Where COMMAND can be one of:'
+                opts.separator '  diff ................. show diff'
+                opts.separator '  ls ................... list files'
+                opts.separator '  patch|import|apply ... apply a patch'
+                opts.separator '  status ............... show status message'
+                opts.separator '  pull|update .......... incorporate changes'
+                opts.separator '  commitall|ca ......... commit all changes on disk'
+                opts.separator '  push (without ARGS: push origin master)'
+                opts.separator ' '
+                opts.separator 'Not every command is supported for every VCS type.'
+                opts.separator 'ATTENTION: The command arguments are not normalized,'
+                opts.separator 'i.e. they are passed to the VCS as provided.'
+                opts.separator ' '
+                opts.separator 'Supported VCS types: git, svn*, hg*'
+                opts.separator '* ... partial support'
+                opts.separator ' '
+
+                opts.separator 'Options:'
+
+                opts.on('-d', '--each-dir DIR', String, "Run ARGS for each sub-directory in DIR") do |value|
+                    config[:root] = value
+                end
+
+                opts.on('-n', '--[no-]dry', 'Dry run') do |bool|
+                    config[:dry] = true
+                end
+
+                opts.separator ' '
+                opts.separator 'Other Options:'
+
+                opts.on('--debug', 'Show debug messages') do |v|
+                    $DEBUG   = true
+                    $VERBOSE = true
+                    AppLog.set_level
+                end
+
+                opts.on('-v', '--verbose', 'Run verbosely') do |v|
+                    $VERBOSE = true
+                    AppLog.set_level
+                end
+
+                opts.on_tail('-h', '--help', 'Show this message') do
+                    puts opts
+                    exit 1
+                end
+            end
+            $logger.debug "command-line arguments: #{args}"
+            argv = opts.parse!(args)
+            $logger.debug "config: #{config}"
+            $logger.debug "argv: #{argv}"
+
+            if argv.empty?
+                puts "No command given"
+                puts `#$0 --help`
+                exit 5
+            end
+
+            if config[:root]
+                config[:dirs] = Dir[File.join(config[:root], '*')]
+                config[:dirs].delete_if {|d| !File.directory?(d)}
+            else
+                config[:dirs] = [Dir.getwd]
+            end
+
+            return Repo.new(config, argv)
+        end
+
+    end
+
+    # config ... hash
+    # args   ... array of strings
+    def initialize(config, args)
+        @config = config
+        @args   = args
+    end
+
+    def process
+        argv = @args.dup
+        arg1 = argv.shift
+        arg1 = SYNONYMS[arg1] || arg1
+        args = argv.join(' ')
+        @config[:dirs].each do |dir|
+            FileUtils.cd(dir) do
+                vcs = detect_vcs
+                if vcs
+                    $logger.warn "Process #{dir.inspect} (#{vcs})"
+                    meth = "do_#{vcs}_#{arg1}"
+                    if respond_to?(meth)
+                        send(meth, args)
+                    else
+                        $logger.warn "Command #{arg1.inspect} not supported for #{vcs} repositories"
+                    end
+                end
+            end
+        end
+    end
+
+    def detect_vcs
+        if File.directory?('.git')
+            'git'
+        elsif File.directory?('.svn')
+            'svn'
+        elsif File.directory?('.hg')
+            'hg'
+        else
+            nil
+        end
+    end
+
+    def do_git_diff(args)
+        run "git diff #{args}"
+    end
+
+    def do_git_ls(args)
+        run "git ls-files #{args}"
+    end
+
+    def do_git_patch(args)
+        run "git apply #{args}"
+    end
+
+    def do_git_status(args)
+        run "git status #{args}"
+    end
+
+    def do_git_pull(args)
+        run "git pull #{args}"
+    end
+    
+    def do_git_push(args)
+        if args.empty?
+            args = 'origin master'
+        end
+        run "git push #{args}"
+    end
+
+    def do_git_commitall(args)
+        run "git add #{args} *"
+        run "git commit"
+    end
+
+    def do_svn_diff(args)
+        run "svn diff #{args}"
+    end
+
+    def do_svn_ls(args)
+        run "svn ls #{args}"
+    end
+
+    def do_svn_patch(args)
+        run "svn import #{args}"
+    end
+
+    def do_svn_status(args)
+        run "svn status #{args}"
+    end
+
+    def do_svn_pull(args)
+        run "svn update #{args}"
+    end
+
+    def do_hg_diff(args)
+        run "hg diff #{args}"
+    end
+
+    def do_hg_ls(args)
+        run "hg locate #{args}"
+    end
+
+    def do_hg_patch(args)
+        run "hg import #{args}"
+    end
+
+    def do_hg_status(args)
+        run "hg status #{args}"
+    end
+
+    def do_hg_pull(args)
+        run "hg pull #{args}"
+        run "hg update"
+    end
+
+    def run(cmd)
+        if @config[:dry]
+            puts cmd
+        else
+            $logger.info cmd
+            puts `#{cmd}`
+            # IO.popen(cmd) do |io|
+            #     l = io.gets
+            #     puts l
+            # end
+        end
+    end
+end
+
+
+if __FILE__ == $0
+    Repo.with_args(ARGV).process
+end
+
+
+# Local Variables:
+# revisionRx: REVISION\s\+=\s\+\'
+# End:
