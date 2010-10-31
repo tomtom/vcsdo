@@ -3,22 +3,39 @@
 # @License:     GPL (see http://www.gnu.org/licenses/gpl.txt)
 # @Created:     2010-10-26.
 # @Last Change: 2010-10-31.
-# @Revision:    76
+# @Revision:    137
 
 require 'optparse'
 require 'rbconfig'
 require 'logger'
 require 'fileutils'
+require 'yaml'
 
 class VCSDo
     APPNAME = 'vcsdo'
-    VERSION = '0.1'
+    VERSION = '0.2'
+    VCSTYPES = ['git', 'svn', 'hg']
     SYNONYMS = {
         'import' => 'patch',
         'apply' => 'patch',
         'ca' => 'commitall',
         'update' => 'pull',
     }
+    CONFIGS = []
+    if ENV['WINDIR']
+        CONFIGS << File.join(File.dirname(ENV['WINDIR'].gsub(/\\/, '/')) ,'vcsdo.yml')
+    else
+        CONFIGS << '/etc/vcsdo.yml'
+    end
+    if ENV['HOME']
+        CONFIGS << File.join(ENV['HOME'].gsub(/\\/, '/'), '.vcsdo.yml')
+        if ENV['HOSTNAME']
+            CONFIGS << File.join(ENV['HOME'].gsub(/\\/, '/'), ".vcsdo_#{ENV['HOSTNAME']}.yml")
+        end
+    elsif ENV['USERPROFILE']
+        CONFIGS << File.join(ENV['USERPROFILE'].gsub(/\\/, '/'), 'vcsdo.yml')
+    end
+    CONFIGS.delete_if {|f| !File.exist?(f)}
 
     class AppLog
         def initialize(output=$stdout)
@@ -46,14 +63,18 @@ class VCSDo
 
             AppLog.new
 
-            config = Hash.new
+            config = {:root => Dir.getwd}
+            CONFIGS.each do |file|
+                config.merge!(YAML.load_file(file))
+            end
             opts = OptionParser.new do |opts|
-                opts.banner =  "Usage: #{File.basename($0)} [OPTIONS] COMMAND [ARGS ...]"
+                opts.banner =  "Usage: #{File.basename($0)} [OPTIONS] [VCSTYPE] COMMAND [ARGS ...]"
                 opts.separator ' '
                 opts.separator 'vcsdo is a free software with ABSOLUTELY NO WARRANTY under'
                 opts.separator 'the terms of the GNU General Public License version 2 or newer.'
                 opts.separator ' '
                 opts.separator 'Where COMMAND can be one of:'
+                opts.separator '  clone ................ create a local copy'
                 opts.separator '  diff ................. show diff'
                 opts.separator '  ls ................... list files'
                 opts.separator '  patch|import|apply ... apply a patch'
@@ -72,12 +93,31 @@ class VCSDo
 
                 opts.separator 'Options:'
 
-                opts.on('-d', '--each-dir DIR', String, "Run ARGS for each sub-directory in DIR") do |value|
-                    config[:root] = value
+                opts.on('-c', '--config YAML', String, 'Config file') do |value|
+                    if File.exist?(value)
+                        config.merge!(YAML.load_file(value))
+                    else
+                        $logger.fatal "Config file does not exist: #{value}"
+                        exit 5
+                    end
+                end
+
+                opts.on('-d', '--dir DIR', String, "Work in DIR") do |value|
+                    config[:root] = expand_arg(config, value)
+                end
+
+                opts.on('-e', '--each [DIR]', String, "Run ARGS for each sub-directory in DIR (implies -d)") do |value|
+                    config[:root] = expand_arg(config, value) unless value.nil?
+                    config[:each] = true
                 end
 
                 opts.on('-n', '--[no-]dry', 'Dry run') do |bool|
                     config[:dry] = true
+                end
+
+                unless CONFIGS.empty?
+                    opts.separator ' '
+                    opts.separator "Configuration: #{CONFIGS.join(', ')}"
                 end
 
                 opts.separator ' '
@@ -110,16 +150,31 @@ class VCSDo
                 exit 5
             end
 
-            if config[:root]
+            config[:root] = File.expand_path(config[:root])
+            if config[:each]
                 config[:dirs] = Dir[File.join(config[:root], '*')]
                 config[:dirs].delete_if {|d| !File.directory?(d)}
             else
-                config[:dirs] = [Dir.getwd]
+                config[:dirs] = [config[:root]]
             end
 
             return VCSDo.new(config, argv)
         end
 
+        def expand_arg(config, arg)
+            if arg =~ /^@/ and (aliases = config['aliases'])
+                arg1 = arg.sub(/^@/, '')
+                if aliases.has_key?(arg1)
+                    aliases[arg1]
+                else
+                    $logger.fatal "Unknown alias: #{arg}"
+                    exit 5
+                end
+            else
+                arg
+            end
+        end
+        
     end
 
     # config ... hash
@@ -132,11 +187,17 @@ class VCSDo
     def process
         argv = @args.dup
         arg1 = argv.shift
+        if VCSTYPES.include?(arg1)
+            vcs0 = arg1
+            arg1 = argv.shift
+        else
+            vcs0 = nil
+        end
         arg1 = SYNONYMS[arg1] || arg1
         args = argv.join(' ')
         @config[:dirs].each do |dir|
             FileUtils.cd(dir) do
-                vcs = detect_vcs
+                vcs = detect_vcs || vcs0
                 if vcs
                     $logger.warn "Process #{dir.inspect} (#{vcs})"
                     meth = "do_#{vcs}_#{arg1}"
@@ -160,6 +221,10 @@ class VCSDo
         else
             nil
         end
+    end
+
+    def do_git_clone(args)
+        run "git clone #{args}"
     end
 
     def do_git_diff(args)
