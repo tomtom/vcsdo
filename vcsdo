@@ -2,8 +2,8 @@
 # @Author:      Tom Link (micathom AT gmail com)
 # @License:     GPL (see http://www.gnu.org/licenses/gpl.txt)
 # @Created:     2010-10-26.
-# @Last Change: 2010-10-31.
-# @Revision:    137
+# @Last Change: 2010-11-01.
+# @Revision:    141
 
 require 'optparse'
 require 'rbconfig'
@@ -41,7 +41,7 @@ class VCSDo
         def initialize(output=$stdout)
             @output = output
             $logger = Logger.new(output)
-            $logger.progname = defined?(APPNAME) ? APPNAME : File.basename($0, '.*')
+            $logger.progname = defined?(APPNAME) ? APPNAME : File.basename(APPNAME, '.*')
             $logger.datetime_format = "%H:%M:%S"
             AppLog.set_level
         end
@@ -68,7 +68,7 @@ class VCSDo
                 config.merge!(YAML.load_file(file))
             end
             opts = OptionParser.new do |opts|
-                opts.banner =  "Usage: #{File.basename($0)} [OPTIONS] [VCSTYPE] COMMAND [ARGS ...]"
+                opts.banner =  "Usage: #{File.basename(APPNAME)} [OPTIONS] [VCSTYPE] COMMAND [ARGS ...]"
                 opts.separator ' '
                 opts.separator 'vcsdo is a free software with ABSOLUTELY NO WARRANTY under'
                 opts.separator 'the terms of the GNU General Public License version 2 or newer.'
@@ -146,7 +146,7 @@ class VCSDo
 
             if argv.empty?
                 puts "No command given"
-                puts `#$0 --help`
+                puts `#{APPNAME} --help`
                 exit 5
             end
 
