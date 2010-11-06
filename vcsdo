@@ -3,7 +3,7 @@
 # @License:     GPL (see http://www.gnu.org/licenses/gpl.txt)
 # @Created:     2010-10-26.
 # @Last Change: 2010-11-01.
-# @Revision:    141
+# @Revision:    144
 
 require 'optparse'
 require 'rbconfig'
@@ -65,6 +65,7 @@ class VCSDo
 
             config = {:root => Dir.getwd}
             CONFIGS.each do |file|
+                $logger.debug "Load configuration from #{file}"
                 config.merge!(YAML.load_file(file))
             end
             opts = OptionParser.new do |opts|
@@ -111,10 +112,6 @@ class VCSDo
                     config[:each] = true
                 end
 
-                opts.on('-n', '--[no-]dry', 'Dry run') do |bool|
-                    config[:dry] = true
-                end
-
                 unless CONFIGS.empty?
                     opts.separator ' '
                     opts.separator "Configuration: #{CONFIGS.join(', ')}"
@@ -122,6 +119,10 @@ class VCSDo
 
                 opts.separator ' '
                 opts.separator 'Other Options:'
+
+                opts.on('-n', '--[no-]dry', 'Dry run') do |bool|
+                    config[:dry] = true
+                end
 
                 opts.on('--debug', 'Show debug messages') do |v|
                     $DEBUG   = true
@@ -241,6 +242,10 @@ class VCSDo
 
     def do_git_status(args)
         run "git status #{args}"
+    end
+
+    def do_git_tag(args)
+        run "git tag #{args}"
     end
 
     def do_git_pull(args)
