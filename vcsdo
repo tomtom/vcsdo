@@ -2,8 +2,8 @@
 # @Author:      Tom Link (micathom AT gmail com)
 # @License:     GPL (see http://www.gnu.org/licenses/gpl.txt)
 # @Created:     2010-10-26.
-# @Last Change: 2010-11-01.
-# @Revision:    144
+# @Last Change: 2010-11-07.
+# @Revision:    149
 
 require 'optparse'
 require 'rbconfig'
@@ -301,20 +301,21 @@ class VCSDo
     end
 
     def do_hg_pull(args)
-        run "hg pull #{args}"
-        run "hg update"
+        run "hg pull #{args}", "hg update"
     end
 
-    def run(cmd)
-        if @config[:dry]
-            puts cmd
-        else
-            $logger.info cmd
-            puts `#{cmd}`
-            # IO.popen(cmd) do |io|
-            #     l = io.gets
-            #     puts l
-            # end
+    def run(*cmds)
+        for cmd in cmds
+            if @config[:dry]
+                puts cmd
+            else
+                $logger.info cmd
+                puts `#{cmd}`
+                if $?.exitstatus != 0
+                    $logger.error "Error #{$?.exitstatus} when running: #{cmd}"
+                    return
+                end
+            end
         end
     end
 end
