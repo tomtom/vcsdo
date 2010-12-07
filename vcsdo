@@ -2,8 +2,8 @@
 # @Author:      Tom Link (micathom AT gmail com)
 # @License:     GPL (see http://www.gnu.org/licenses/gpl.txt)
 # @Created:     2010-10-26.
-# @Last Change: 2010-11-07.
-# @Revision:    149
+# @Last Change: 2010-11-21.
+# @Revision:    154
 
 require 'optparse'
 require 'rbconfig'
@@ -14,7 +14,7 @@ require 'yaml'
 class VCSDo
     APPNAME = 'vcsdo'
     VERSION = '0.2'
-    VCSTYPES = ['git', 'svn', 'hg']
+    VCSTYPES = ['git', 'svn', 'hg', 'bzr']
     SYNONYMS = {
         'import' => 'patch',
         'apply' => 'patch',
@@ -219,11 +219,31 @@ class VCSDo
             'svn'
         elsif File.directory?('.hg')
             'hg'
+        elsif File.directory?('.bzr')
+            'bzr'
         else
             nil
         end
     end
 
+    def run(*cmds)
+        for cmd in cmds
+            if @config[:dry]
+                puts cmd
+            else
+                $logger.info cmd
+                puts `#{cmd}`
+                if $?.exitstatus != 0
+                    $logger.error "Error #{$?.exitstatus} when running: #{cmd}"
+                    return
+                end
+            end
+        end
+    end
+
+
+
+    ###################################### git {{{1
     def do_git_clone(args)
         run "git clone #{args}"
     end
@@ -260,10 +280,12 @@ class VCSDo
     end
 
     def do_git_commitall(args)
-        run "git add #{args} *"
-        run "git commit"
+        run "git add #{args} *", "git commit"
     end
 
+
+
+    ###################################### svn {{{1
     def do_svn_diff(args)
         run "svn diff #{args}"
     end
@@ -284,6 +306,9 @@ class VCSDo
         run "svn update #{args}"
     end
 
+
+
+    ###################################### hg {{{1
     def do_hg_diff(args)
         run "hg diff #{args}"
     end
@@ -304,20 +329,38 @@ class VCSDo
         run "hg pull #{args}", "hg update"
     end
 
-    def run(*cmds)
-        for cmd in cmds
-            if @config[:dry]
-                puts cmd
-            else
-                $logger.info cmd
-                puts `#{cmd}`
-                if $?.exitstatus != 0
-                    $logger.error "Error #{$?.exitstatus} when running: #{cmd}"
-                    return
-                end
-            end
+
+
+    ###################################### bzr {{{1
+    def do_bzr_clone(args)
+        run "bzr checkout #{args}"
+    end
+
+    def do_bzr_diff(args)
+        run "bzr diff #{args}"
+    end
+
+    def do_bzr_ls(args)
+        run "bzr ls #{args}"
+    end
+
+    def do_bzr_status(args)
+        run "bzr status #{args}"
+    end
+
+    def do_bzr_tag(args)
+        if !args or args.empty?
+            run "bzr tags"
+        else
+            run "bzr tag #{args}"
         end
     end
+
+    def do_bzr_pull(args)
+        run "bzr pull #{args}"
+    end
+
+
 end
 
 
