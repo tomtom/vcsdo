@@ -7,7 +7,11 @@ script tries to facilitate, e.g., updating local copies of different
 vcs.
 
 vcsdo does not aim at being a grand unified ui. It supports only simple 
-tasks.
+tasks, things you would want to do when you keep a local copy of a 
+source code repository to stay up to date but don't want to actually 
+work on the code.
+
+The following vcs are supported to some extent: git, svn, hg, bzr.
 
 
 Configuration
